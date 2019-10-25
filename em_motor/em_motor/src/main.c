@@ -17,7 +17,6 @@ void generate_PWM(void);
 volatile int result;
 volatile int ref_ADC_value = 2153;	//12 bit value
 volatile int R1 = 1000;	//units (ohm)
-volatile float mm_per_OHM = .09975; // units (mm/ohm)
 volatile float mm_per_OHM1 = .025;//.02693;
 volatile float distance;	// units (mm)
 volatile float distance1;	// units (mm)
@@ -73,9 +72,9 @@ void clock_setup(void){
 	while (GCLK->STATUS.bit.SYNCBUSY){}	//waiting for sync to complete  
 		
 	GCLK->CLKCTRL.reg |= 0<<14;	//disable clock
-	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC4_TC5 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
-	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC6_TC7 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
-	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC2_TC3 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC4_TC5 | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC6_TC7 | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC2_TC3 | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC0_TCC1 | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_ADC | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	//setup genclk for ADC
 	while (GCLK->STATUS.bit.SYNCBUSY==1){}	//waiting for sync to complete  
@@ -103,10 +102,10 @@ void port_setup(void){
 	//porA->PMUX[5].bit.PMUXE = 1;	//mux the ADC to pin PA10 (10=2*n)	AIN[18]
 	//porA->PINCFG[10].bit.PMUXEN =1;	//enable the MUX
 	
-	porA->PMUX[10].bit.PMUXE = 5;	//mux the TCC0 wavegen PA20	PWM output
-	porA->PINCFG[20].bit.PMUXEN = 1;	//enable the mux
-	porA->PMUX[10].bit.PMUXO = 5;	//mux the TCC0 wavegen PA21	PWM output
-	porA->PINCFG[21].bit.PMUXEN = 1;	//enable the mux
+	porA->PMUX[4].bit.PMUXE = 4;	//mux the TCC0 wavegen PA08	PWM output
+	porA->PINCFG[8].bit.PMUXEN = 1;	//enable the mux
+	porA->PMUX[4].bit.PMUXO = 4;	//mux the TCC0 wavegen PA09	PWM output
+	porA->PINCFG[9].bit.PMUXEN = 1;	//enable the mux
 	
 	//porB->PMUX[15].bit.PMUXE = 4;	//mux the TCC0 wavegen PB30	PWM output
 	//porB->PINCFG[30].bit.PMUXEN = 1;	//enable the mux
@@ -127,9 +126,9 @@ void port_setup(void){
 	//porB->PMUX[2].bit.PMUXE = 1;	//mux the ADC to pin PB04 (4=2*n)	AIN[12]
 	//porB>PINCFG[4].bit.PMUXEN =1;	//enable the MUX
 	
-	porA->PMUX[9].bit.PMUXE = 5;	//mux the TC3 wavegen PA18	PWM output
+	porA->PMUX[9].bit.PMUXE = 4;	//mux the TC3 wavegen PA18	PWM output
 	porA->PINCFG[18].bit.PMUXEN = 1;	//enable the mux
-	porA->PMUX[9].bit.PMUXO = 5;	//mux the TC3 wavegen PA19	PWM output
+	porA->PMUX[9].bit.PMUXO = 4;	//mux the TC3 wavegen PA19	PWM output
 	porA->PINCFG[19].bit.PMUXEN = 1;	//enable the mux
 	
 	//the coil4
@@ -176,11 +175,11 @@ void timer_setup_1(void){
 	tc3->CTRLA.bit.PRESCALER = 0;	//divide by 1;
 	tc3->CTRLA.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tc3->CTRLA.bit.MODE = 1;	//8 bit mode	
-	tc3->PER.reg = 0xff;
+	tc3->PER.reg = 0x32;
 	tc3->CTRLC.bit.INVEN1 = 1;//invert channel 1
 	while(tc3->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
-	tc3->CC[0].reg = 0x80;
-	tc3->CC[1].reg = 0x80;
+	tc3->CC[0].reg = 0x19;
+	tc3->CC[1].reg = 0x19;
 	tc3->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tc3->STATUS.bit.SYNCBUSY){}	//wait for sync to complete	
 	tc3->CTRLA.reg |= 1<<1;	//enable the TC3
@@ -196,11 +195,11 @@ void timer_setup_2(void){
 	tc4->CTRLA.bit.PRESCALER = 0;	//divide by 1;
 	tc4->CTRLA.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tc4->CTRLA.bit.MODE = 1;	//8 bit mode
-	tc4->PER.reg = 0xff;
+	tc4->PER.reg = 0x32;
 	tc4->CTRLC.bit.INVEN1 = 1;//invert channel 1
 	while(tc4->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
-	tc4->CC[0].reg = 0x80;
-	tc4->CC[1].reg = 0x80;
+	tc4->CC[0].reg = 0x19;
+	tc4->CC[1].reg = 0x19;
 	tc4->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tc4->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
 	tc4->CTRLA.reg |= 1<<1;	//enable the TC4
@@ -216,11 +215,11 @@ void timer_setup_3(void){
 	tc5->CTRLA.bit.PRESCALER = 0;	//divide by 1;
 	tc5->CTRLA.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tc5->CTRLA.bit.MODE = 1;	//8 bit mode
-	tc5->PER.reg = 0xff;
+	tc5->PER.reg = 0x32;
 	tc5->CTRLC.bit.INVEN1 = 1;//invert channel 1
 	while(tc5->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
-	tc5->CC[0].reg = 0x80;
-	tc5->CC[1].reg = 0x80;
+	tc5->CC[0].reg = 0x19;
+	tc5->CC[1].reg = 0x19;
 	tc5->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tc5->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
 	tc5->CTRLA.reg |= 1<<1;	//enable the TC5
@@ -236,11 +235,11 @@ void timer_setup_4(void){
 	tc6->CTRLA.bit.PRESCALER = 0;	//divide by 1;
 	tc6->CTRLA.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tc6->CTRLA.bit.MODE = 1;	//8 bit mode
-	tc6->PER.reg = 0xff;
+	tc6->PER.reg = 0x32;
 	tc6->CTRLC.bit.INVEN1 = 1;//invert channel 1
 	while(tc6->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
-	tc6->CC[0].reg = 0x80;
-	tc6->CC[1].reg = 0x80;
+	tc6->CC[0].reg = 0x19;
+	tc6->CC[1].reg = 0x19;
 	tc6->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tc6->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
 	tc6->CTRLA.reg |= 1<<1;	//enable the TC6
@@ -256,11 +255,11 @@ void timer_setup_5(void){
 	tc7->CTRLA.bit.PRESCALER = 0;	//divide by 1;
 	tc7->CTRLA.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tc7->CTRLA.bit.MODE = 1;	//8 bit mode
-	tc7->PER.reg = 0xff;
+	tc7->PER.reg = 0x32;
 	tc7->CTRLC.bit.INVEN1 = 1;//invert channel 1
 	while(tc7->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
-	tc7->CC[0].reg = 0x80;
-	tc7->CC[1].reg = 0x80;
+	tc7->CC[0].reg = 0x19;
+	tc7->CC[1].reg = 0x19;
 	tc7->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tc7->STATUS.bit.SYNCBUSY){}	//wait for sync to complete
 	tc7->CTRLA.reg |= 1<<1;	//enable the TC7
@@ -269,33 +268,20 @@ void timer_setup_5(void){
 //coil1 using TCC0
 void timer_setup_6(void){
 	Tcc *tcc = TCC0;
-	tcc->CTRLA.reg |= 0<<1;	//disable the TC7
+	tcc->CTRLA.reg |= 0<<1;	//disable the TCC0
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
 	//tcc->WAVE.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
 	tcc->PER.reg = 0x32;
-	tcc->DRVCTRL.bit.INVEN3 = 1;//invert channel 1
+	tcc->DRVCTRL.bit.INVEN1 = 1;//invert channel 1
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
-	tcc->CC[2].reg = 0x19;
-	tcc->CC[3].reg = 0x19;
+	tcc->CC[0].reg = 0x19;
+	tcc->CC[1].reg = 0x19;
 	tcc->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
-	tcc->CTRLA.reg |= 1<<1;	//enable the TC7
+	tcc->CTRLA.reg |= 1<<1;	//enable the TCC0
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
 }
-
-
-/*
-void TC4_Handler(void){
-	Port *port = PORT;
-	PortGroup *porA = &(port->Group[0]);
-	porA->DIRSET.reg = 1<<10;
-	porA->OUTSET.reg = PORT_PA10;	//turn on power to sensor
-	Tc *tc = TC4;
-	TcCount8 *tcc = &tc->COUNT8;
-	tcc->INTFLAG.bit.OVF = 1;	//clear the interrupt
-}
-*/
 
 
 void ADC_setup(void){
@@ -347,11 +333,8 @@ void convert(void){
 	value_OHM = value_V * R1 / (3.3 - value_V);
 	OHM_travel = value_OHM - ref_OHM;
 	distance = OHM_travel *mm_per_OHM1; //units (mm) distance of 0 means furthest away form coil
-	
-	distance1 = OHM_travel *mm_per_OHM1; //units (mm) distance of 0 means furthest away form coil
 
-
- 	//generate_PWM();
+ 	generate_PWM();
 }
 
 void generate_PWM(void){
