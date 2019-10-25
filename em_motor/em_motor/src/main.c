@@ -15,13 +15,14 @@ void convert(void);
 void generate_PWM(void);
 
 volatile int result;
-volatile int ref_ADC_value = 1643;	//12 bit value
+volatile int ref_ADC_value = 2153;	//12 bit value
 volatile int R1 = 1000;	//units (ohm)
 volatile float mm_per_OHM = .09975; // units (mm/ohm)
 volatile float mm_per_OHM1 = .025;//.02693;
 volatile float distance;	// units (mm)
 volatile float distance1;	// units (mm)
 volatile int PWM_value1;
+volatile int p = 48;
 
 volatile float coil_len = 25.4;	//units (mm)
 volatile float norm_factor = (25.4 * 25.4) / 127;
@@ -75,7 +76,7 @@ void clock_setup(void){
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC4_TC5 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TC6_TC7 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC2_TC3 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
-	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC0_TCC1 | GCLK_CLKCTRL_GEN_GCLK0 | 1<<14;	
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_TCC0_TCC1 | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_ADC | GCLK_CLKCTRL_GEN_GCLK1 | 1<<14;	//setup genclk for ADC
 	while (GCLK->STATUS.bit.SYNCBUSY==1){}	//waiting for sync to complete  
 		
@@ -84,7 +85,7 @@ void clock_setup(void){
 	PM->APBBSEL.bit.APBBDIV = 0;	//divide apbb bus by 1 
 	PM->APBCSEL.bit.APBCDIV = 0;	//divide apbc bus by 1
 	PM->APBAMASK.reg |= 1<<3;	
-	PM->APBCMASK.reg |= PM_APBCMASK_TC3 | PM_APBCMASK_TC4 | PM_APBCMASK_TC5 | PM_APBCMASK_TC6 | PM_APBCMASK_TC7 | PM_APBCMASK_TCC0;	
+	PM->APBCMASK.reg |= PM_APBCMASK_TC3 | PM_APBCMASK_TC4 | PM_APBCMASK_TC5 | PM_APBCMASK_TC6 | PM_APBCMASK_TC7 | PM_APBCMASK_TCC0 | PM_APBCMASK_TCC2;	
 	PM->APBCMASK.reg |= 1<<16;	//enable the ADC APB
 }
 
@@ -106,6 +107,11 @@ void port_setup(void){
 	porA->PINCFG[20].bit.PMUXEN = 1;	//enable the mux
 	porA->PMUX[10].bit.PMUXO = 5;	//mux the TCC0 wavegen PA21	PWM output
 	porA->PINCFG[21].bit.PMUXEN = 1;	//enable the mux
+	
+	//porB->PMUX[15].bit.PMUXE = 4;	//mux the TCC0 wavegen PB30	PWM output
+	//porB->PINCFG[30].bit.PMUXEN = 1;	//enable the mux
+	//porB->PMUX[15].bit.PMUXO = 4;	//mux the TCC0 wavegen PB31	PWM output
+	//porB->PINCFG[31].bit.PMUXEN = 1;	//enable the mux
 
 	
 	//the coil2
@@ -121,9 +127,9 @@ void port_setup(void){
 	//porB->PMUX[2].bit.PMUXE = 1;	//mux the ADC to pin PB04 (4=2*n)	AIN[12]
 	//porB>PINCFG[4].bit.PMUXEN =1;	//enable the MUX
 	
-	porA->PMUX[9].bit.PMUXE = 4;	//mux the TC3 wavegen PA18	PWM output
+	porA->PMUX[9].bit.PMUXE = 5;	//mux the TC3 wavegen PA18	PWM output
 	porA->PINCFG[18].bit.PMUXEN = 1;	//enable the mux
-	porA->PMUX[9].bit.PMUXO = 4;	//mux the TC3 wavegen PA19	PWM output
+	porA->PMUX[9].bit.PMUXO = 5;	//mux the TC3 wavegen PA19	PWM output
 	porA->PINCFG[19].bit.PMUXEN = 1;	//enable the mux
 	
 	//the coil4
@@ -132,7 +138,7 @@ void port_setup(void){
 	
 	porB->PMUX[1].bit.PMUXE = 4;	//mux the TC6 wavegen PB02	PWM output
 	porB->PINCFG[2].bit.PMUXEN = 1;	//enable the mux
-	porB->PMUX[1].bit.PMUXO = 4;	//mux the TC6 wavegen PB02	PWM output
+	porB->PMUX[1].bit.PMUXO = 4;	//mux the TC6 wavegen PB03	PWM output
 	porB->PINCFG[3].bit.PMUXEN = 1;	//enable the mux
 	
 	//the coil5
@@ -267,10 +273,11 @@ void timer_setup_6(void){
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
 	//tcc->WAVE.bit.WAVEGEN = 2;	//normal PWM frequency per=period, CC1/CC0=compare value
 	tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
-	tcc->PER.reg = 0xff;
-	tcc->DRVCTRL.bit.INVEN7 = 1;//invert channel 1
+	tcc->PER.reg = 0x32;
+	tcc->DRVCTRL.bit.INVEN3 = 1;//invert channel 1
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
-	tcc->CC[0].reg |= 0xA0;
+	tcc->CC[2].reg = 0x19;
+	tcc->CC[3].reg = 0x19;
 	tcc->CTRLBSET.bit.ONESHOT = 0;	//turn off one shot mode
 	while(tcc->SYNCBUSY.reg){}	//wait for sync of disable
 	tcc->CTRLA.reg |= 1<<1;	//enable the TC7
@@ -343,11 +350,8 @@ void convert(void){
 	
 	distance1 = OHM_travel *mm_per_OHM1; //units (mm) distance of 0 means furthest away form coil
 
-	//PWM_value = ((coil_len - distance) * (coil_len - distance)) / norm_factor;
-	//PWM_value1 = ((coil_len - distance1) * (coil_len - distance1)) / norm_factor;
 
- 	generate_PWM();
-	//old_result = result;
+ 	//generate_PWM();
 }
 
 void generate_PWM(void){
@@ -369,15 +373,14 @@ void generate_PWM(void){
 	
 
 		//c2<-		
-		if (distance >= 48 && distance < 50.8){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
+		if (distance >= -p && distance < 0){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0xA0;
+			tc3->CC[0].reg = 0xA0;	
+			tc3->CC[1].reg = 0xA0;
 			tc4->CC[0].reg = 0x80;
 			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0xA0;
-			tc5->CC[1].reg = 0xA0;
+			tc5->CC[0].reg = 0x60;
+			tc5->CC[1].reg = 0x60;
 			tc6->CC[0].reg = 0x80;
 			tc6->CC[1].reg = 0x80;
 			tc7->CC[0].reg = 0x80;
@@ -385,230 +388,123 @@ void generate_PWM(void){
 			
 		}
 		//c1->
-		else if (distance >= 50.8 && distance < 72){	//no current, duty cycle is 50%	
-			tcc->CC[0].bit.CC = 0x60;
-			tcc->CC[0].bit.CC = 0x60;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
+		else if (distance >= 0 && distance < p/2){	//no current, duty cycle is 50%	
+			tcc->CC[0].bit.CC = 0xA0;
+			tc3->CC[0].reg = 0x00;	
+			tc3->CC[1].reg = 0x00;
 			tc4->CC[0].reg = 0x80;
 			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0xA0;
-			tc5->CC[1].reg = 0xA0;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
+			tc5->CC[0].reg = 0x80;
+			tc5->CC[1].reg = 0x80;
+			tc6->CC[0].reg = 0xFF;
+			tc6->CC[1].reg = 0xFF;
 			tc7->CC[0].reg = 0x80;
 			tc7->CC[1].reg = 0x80;	
 		}
 		//c5<-
-		else if (distance >= 72 && distance < 74.8){	//no current, duty cycle is 50%
+		else if (distance >= p/2 && distance < p){	//no current, duty cycle is 50%
 			tcc->CC[0].bit.CC = 0x60;
-			tcc->CC[0].bit.CC = 0x60;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
+			tc3->CC[0].reg = 0x00;	
+			tc3->CC[1].reg = 0x00;
 			tc4->CC[0].reg = 0x80;
 			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0xA0;
-			tc5->CC[1].reg = 0xA0;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-			
-		}
-		//c4->
-		else if (distance >=74.8 && distance < 96){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x60;
-			tcc->CC[0].bit.CC = 0x60;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0xA0;
-			tc5->CC[1].reg = 0xA0;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-			
-		}
-		//c3<-
-		else if (distance >= 96 && distance < 98.8){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x60;
-			tcc->CC[0].bit.CC = 0x60;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0xA0;
-			tc5->CC[1].reg = 0xA0;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-			
-		}
-		//c2->
-		else if (distance >=98.8 && distance < 101.6){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x60;
-			tcc->CC[0].bit.CC = 0x60;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-		}
-		//c1-X
-		else if (distance >= 101.6 && distance < 120){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-		}
-		//c6<-
-		else if (distance >= 120 && distance < 122.8){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0xA0;
-			tc4->CC[1].reg = 0xA0;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0xA0;
-			tc7->CC[1].reg = 0xA0;
-		}
-		//c5->
-		else if (distance >= 122.8 && distance < 126){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0xA0;
-			tc4->CC[1].reg = 0xA0;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x60;
-			tc6->CC[1].reg = 0x60;
-			tc7->CC[0].reg = 0x60;
-			tc7->CC[1].reg = 0x60;
-		}
-		//c4-X
-		else if (distance >= 126 && distance < 146.8){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0xA0;	
-			tc3->CC[1].reg = 0xA0;
-			tc4->CC[0].reg = 0xA0;
-			tc4->CC[1].reg = 0xA0;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
-			tc7->CC[0].reg = 0x60;
-			tc7->CC[1].reg = 0x60;
-		}
-		//c3-X
-		else if (distance >= 146.8 && distance < 149.6){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
-			tc4->CC[0].reg = 0xA0;
-			tc4->CC[1].reg = 0xA0;
-			tc5->CC[0].reg = 0x60;
-			tc5->CC[1].reg = 0x60;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
-			tc7->CC[0].reg = 0x60;
-			tc7->CC[1].reg = 0x60;
-		}
-		//c2-X
-		else if (distance >= 149.6 && distance < 170.8){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
-			tc4->CC[0].reg = 0xA0;
-			tc4->CC[1].reg = 0xA0;
-			tc5->CC[0].reg = 0x80;
-			tc5->CC[1].reg = 0x80;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
-			tc7->CC[0].reg = 0x60;
-			tc7->CC[1].reg = 0x60;
-		}
-		//c6-X
-		else if (distance >= 170.8 && distance < 173.6){	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0x80;
-			tc5->CC[1].reg = 0x80;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
-			tc7->CC[0].reg = 0x60;
-			tc7->CC[1].reg = 0x60;
-		}
-		//c5-X
-		else {	//no current, duty cycle is 50%
-			tcc->CC[0].bit.CC = 0x80;
-			tcc->CC[0].bit.CC = 0x80;	
-			tc3->CC[0].reg = 0x80;	
-			tc3->CC[1].reg = 0x80;
-			tc4->CC[0].reg = 0x80;
-			tc4->CC[1].reg = 0x80;
-			tc5->CC[0].reg = 0x80;
-			tc5->CC[1].reg = 0x80;
-			tc6->CC[0].reg = 0x80;
-			tc6->CC[1].reg = 0x80;
+			tc5->CC[0].reg = 0xFF;
+			tc5->CC[1].reg = 0xFF;
+			tc6->CC[0].reg = 0xFF;
+			tc6->CC[1].reg = 0xFF;
 			tc7->CC[0].reg = 0x80;
 			tc7->CC[1].reg = 0x80;
 			
 		}
+		//c4->
+		else if (distance >=p && distance < 3*p/2){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x60;
+			tc3->CC[0].reg = 0x80;	
+			tc3->CC[1].reg = 0x80;
+			tc4->CC[0].reg = 0x80;
+			tc4->CC[1].reg = 0x80;
+			tc5->CC[0].reg = 0xFF;
+			tc5->CC[1].reg = 0xFF;
+			tc6->CC[0].reg = 0x00;
+			tc6->CC[1].reg = 0x00;
+			tc7->CC[0].reg = 0xFF;
+			tc7->CC[1].reg = 0xFF;
+			
+		}
+		//c3<-
+		else if (distance >= 3*p/2 && distance < 2*p){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x80;
+			tc3->CC[0].reg = 0xFF;	
+			tc3->CC[1].reg = 0xFF;
+			tc4->CC[0].reg = 0x80;
+			tc4->CC[1].reg = 0x80;
+			tc5->CC[0].reg = 0x00;
+			tc5->CC[1].reg = 0x00;
+			tc6->CC[0].reg = 0x00;
+			tc6->CC[1].reg = 0x00;
+			tc7->CC[0].reg = 0xFF;
+			tc7->CC[1].reg = 0xFF;
+			
+		}
+		//c2->
+		else if (distance >=2*p && distance < 5*p/2){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x80;
+			tc3->CC[0].reg = 0xFF;	
+			tc3->CC[1].reg = 0xFF;
+			tc4->CC[0].reg = 0xFF;
+			tc4->CC[1].reg = 0xFF;
+			tc5->CC[0].reg = 0x00;
+			tc5->CC[1].reg = 0x00;
+			tc6->CC[0].reg = 0x80;
+			tc6->CC[1].reg = 0x80;
+			tc7->CC[0].reg = 0x00;
+			tc7->CC[1].reg = 0x00;
+		}
+		//c1-X
+		else if (distance >= 5*p/2 && distance < 3*p){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x80;	
+			tc3->CC[0].reg = 0x00;	
+			tc3->CC[1].reg = 0x00;
+			tc4->CC[0].reg = 0xFF;
+			tc4->CC[1].reg = 0xFF;
+			tc5->CC[0].reg = 0x80;
+			tc5->CC[1].reg = 0x80;
+			tc6->CC[0].reg = 0xFF;
+			tc6->CC[1].reg = 0xFF;
+			tc7->CC[0].reg = 0x00;
+			tc7->CC[1].reg = 0x00;
+		}
+		//c6<-
+		else if (distance >= 3*p && distance < 7*p/2){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x80;	
+			tc3->CC[0].reg = 0x00;	
+			tc3->CC[1].reg = 0x00;
+			tc4->CC[0].reg = 0x00;
+			tc4->CC[1].reg = 0x00;
+			tc5->CC[0].reg = 0x80;
+			tc5->CC[1].reg = 0x80;
+			tc6->CC[0].reg = 0xFF;
+			tc6->CC[1].reg = 0xFF;
+			tc7->CC[0].reg = 0x80;
+			tc7->CC[1].reg = 0x80;
+		}
+		//c5->
+		else if (distance >= 7*p/2 && distance < 9*p/2){	//no current, duty cycle is 50%
+			tcc->CC[0].bit.CC = 0x80;	
+			tc3->CC[0].reg = 0x80;	
+			tc3->CC[1].reg = 0x80;
+			tc4->CC[0].reg = 0x00;
+			tc4->CC[1].reg = 0x00;
+			tc5->CC[0].reg = 0x80;
+			tc5->CC[1].reg = 0x80;
+			tc6->CC[0].reg = 0x00;
+			tc6->CC[1].reg = 0x00;
+			tc7->CC[0].reg = 0xFF;
+			tc7->CC[1].reg = 0xFF;
+		}
 	
+		
 	
-	//if (distance > 25.4 || distance < 0){	//no current, duty cycle is 50%
-		//tcc->CC[0].reg = 0x80;	
-		//tcc->CC[1].reg = 0x80;
-	//}
-	//
-	//if (distance1 > 25.4 || distance1 < 0){	//no current, duty cycle is 50%
-		////tcc->CC[0].reg = 0x80;
-		//tcc->CC[1].reg = 0x80;
-	//}
-	//
-	//else{	//coil moving in
-		//tcc->CC[0].reg = 128 + PWM_value;
-		//tcc->CC[1].reg = 128 + PWM_value1;
-	//}
-	
-	//direction
-	//else if(old_result - result > 1){	//coil moving in, duty cycle {128-255}
-		//tcc->CC[0].reg = 128 + PWM_value;
-		//tcc->CC[1].reg = 128 + PWM_value;
-	//}
-	//else if(result - old_result > 1){	//coil moving out, duty cycle {0-127}
-		//tcc->CC[0].reg = 127 - PWM_value;
-		//tcc->CC[1].reg = 127 - PWM_value;
-	//}
 }
 
 
